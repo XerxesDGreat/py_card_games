@@ -1,6 +1,8 @@
-from games import *
+__all__ = ["uno", "oldmaid", "registry"]
 
-def get_available_games():
-	return [
-		("Uno!", "uno")
-	]
+from registry import GameRegistry
+from uno import UnoGameLogic
+from oldmaid import OldMaidGameLogic
+
+GameRegistry.register_game(UnoGameLogic)
+GameRegistry.register_game(OldMaidGameLogic)

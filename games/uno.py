@@ -3,9 +3,9 @@ from time import sleep
 from sys import stdout
 
 def get_game_play_class():
-	return UnoGamePlay
+	return UnoGameLogic
 
-class UnoCardContainer(AbstractCardContainer):
+class UnoCardFactory(AbstractCardFactory):
 	SUITS = ["r", "b", "g", "y"]
 	SUITED_VALUES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, "S","D2", "R"]
 	WILD_CARD_VALUES = ["W", "D4"]
@@ -19,14 +19,14 @@ class UnoCardContainer(AbstractCardContainer):
 		Create a deck of cards ready for UNO
 		'''
 		# all the regular, colored cards
-		for suit in UnoCardContainer.SUITS:
-			for value in UnoCardContainer.SUITED_VALUES:
+		for suit in UnoCardFactory.SUITS:
+			for value in UnoCardFactory.SUITED_VALUES:
 				cards.append(UnoCard(suit, str(value)))
 				if value != 0:
 					# there are two of each value > 0
 					cards.append(UnoCard(suit, str(value)))
 		# special cards; 4 of each
-		for value in UnoCardContainer.WILD_CARD_VALUES:
+		for value in UnoCardFactory.WILD_CARD_VALUES:
 			i = 0
 			while i < 4:
 				cards.append(UnoCard(None, str(value)))
@@ -38,25 +38,25 @@ class UnoCard(Card):
 		'''
 		Whether this card is wild
 		'''
-		return self.value in UnoCardContainer.WILD_CARD_VALUES
+		return self.value in UnoCardFactory.WILD_CARD_VALUES
 	
 	def is_draw(self):
 		'''
 		Whether this card is a draw card
 		'''
-		return self.value in UnoCardContainer.DRAW_CARD_VALUES
+		return self.value in UnoCardFactory.DRAW_CARD_VALUES
 	
 	def is_skip(self):
 		'''
 		Whether this card is a skip card
 		'''
-		return self.value in UnoCardContainer.SKIP_CARD_VALUES
+		return self.value in UnoCardFactory.SKIP_CARD_VALUES
 	
 	def is_reverse(self):
 		'''
 		Whether this card is a reverse card
 		'''
-		return self.value in UnoCardContainer.REVERSE_CARD_VALUES
+		return self.value in UnoCardFactory.REVERSE_CARD_VALUES
 	
 	def num_draw_cards(self):
 		'''
@@ -177,7 +177,7 @@ class UnoPlayer(AbstractPlayer):
 		return (match, new_suit)
 
 
-class UnoGamePlay(AbstractGamePlay):
+class UnoGameLogic(AbstractGameLogic):
 	NUM_CARDS = 7
 	MAX_PLAYERS = 10
 	MIN_PLAYERS = 2
@@ -191,23 +191,35 @@ class UnoGamePlay(AbstractGamePlay):
 		self._make_cards()
 		self.draw_pile.shuffle(self._get_num_times_to_shuffle())
 	
-	def print_starting_message(self):
-		print "===================================================="
-		print "=                                                  ="
-		print "=      UU    UU    NN   NN      OOOO     !!!!      ="
-		print "=      UU    UU    NNN  NN     OO  OO    !!!!      ="
-		print "=      UU    UU    NNNN NN    OO    OO   !!!!      ="
-		print "=      UU    UU    NN NNNN    OO    OO    !!       ="
-		print "=       UU  UU     NN  NNN     OO  OO              ="
-		print "=        UUUU      NN   NN      OOOO      !!       ="
-		print "=                                                  ="
-		print "===================================================="
+	@staticmethod
+	def get_friendly_name():
+		return "Uno!"
+	
+	@staticmethod
+	def get_starting_message():
+		return '''
+  UUUUUUUU     UUUUUUUUNNNNNNNN        NNNNNNNN     OOOOOOOOO      !!! 
+  U::::::U     U::::::UN:::::::N       N::::::N   OO:::::::::OO   !!:!!
+  U::::::U     U::::::UN::::::::N      N::::::N OO:::::::::::::OO !:::!
+  UU:::::U     U:::::UUN:::::::::N     N::::::NO:::::::OOO:::::::O!:::!
+   U:::::U     U:::::U N::::::::::N    N::::::NO::::::O   O::::::O!:::!
+   U:::::D     D:::::U N:::::::::::N   N::::::NO:::::O     O:::::O!:::!
+   U:::::D     D:::::U N:::::::N::::N  N::::::NO:::::O     O:::::O!:::!
+   U:::::D     D:::::U N::::::N N::::N N::::::NO:::::O     O:::::O!:::!
+   U:::::D     D:::::U N::::::N  N::::N:::::::NO:::::O     O:::::O!:::!
+   U:::::D     D:::::U N::::::N   N:::::::::::NO:::::O     O:::::O!:::!
+   U:::::D     D:::::U N::::::N    N::::::::::NO:::::O     O:::::O!!:!!
+   U::::::U   U::::::U N::::::N     N:::::::::NO::::::O   O::::::O !!! 
+   U:::::::UUU:::::::U N::::::N      N::::::::NO:::::::OOO:::::::O     
+    UU:::::::::::::UU  N::::::N       N:::::::N OO:::::::::::::OO  !!! 
+      UU:::::::::UU    N::::::N        N::::::N   OO:::::::::OO   !!:!!
+        UUUUUUUUU      NNNNNNNN         NNNNNNN     OOOOOOOOO      !!!'''
 	
 	def _get_min_num_players(self):
-		return UnoGamePlay.MIN_PLAYERS
+		return UnoGameLogic.MIN_PLAYERS
 
 	def _get_max_num_players(self):
-		return UnoGamePlay.MAX_PLAYERS
+		return UnoGameLogic.MAX_PLAYERS
 	
 	def _get_player_class(self):
 		return UnoPlayer
@@ -215,13 +227,13 @@ class UnoGamePlay(AbstractGamePlay):
 	def _make_cards(self):
 		if self.cards_initialized:
 			return
-		self.draw_pile = Deck(UnoCardContainer())
-		self.discard_pile = Deck(EmptyCardContainer())
+		self.draw_pile = Deck(UnoCardFactory())
+		self.discard_pile = Deck(EmptyCardFactory())
 
 	
 	def _deal(self):
 		i = 0
-		while i < UnoGamePlay.NUM_CARDS:
+		while i < UnoGameLogic.NUM_CARDS:
 			for player in self.players:
 				card = self.draw_pile.top_card()
 				player.draw_card(card)
@@ -237,7 +249,7 @@ class UnoGamePlay(AbstractGamePlay):
 		while self.winner == None:
 			msg = ""
 			player = self.players[player_index]
-			starting_cards = player.num_cards()
+			starting_cards = player.num_cards_in_hand()
 			old_active_suit = active_suit
 
 			turn_args = {
@@ -250,7 +262,7 @@ class UnoGamePlay(AbstractGamePlay):
 
 			msg += "Player %s played %s and has " % (player.name, str(card_played))
 
-			ending_cards = player.num_cards()
+			ending_cards = player.num_cards_in_hand()
 			cards_drawn = ending_cards - starting_cards + 1
 
 			msg += "%d cards remaining! " % ending_cards
@@ -277,16 +289,17 @@ class UnoGamePlay(AbstractGamePlay):
 			if active_suit != old_active_suit:
 				msg += "New suit: %s" % active_suit
 			print (msg)
-			if player.num_cards() == 1:
+			if player.num_cards_in_hand() == 1:
 				print "========= Player %s has UNO! =========" % player.name
-			if player.num_cards() == 0:
+			if player.num_cards_in_hand() == 0:
 				self.winner = player
+				break
 
 			player_index = self._next_player(player_index, reversed)	
 		
 			sleep(.25)
 
-		print "Winner is %s! Congratulations!" % self.winner.name
+		return self.winner
 	
 	def _flip_draw_card(self):
 		self.discard_pile.add_card(self.draw_pile.top_card())

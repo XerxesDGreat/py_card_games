@@ -55,6 +55,12 @@ class Deck:
 		'''
 		self.card_list.append(card)
 	
+	def remove_card(self, card):
+		'''
+		Removes a Card from the list
+		'''
+		self.card_list.remove(card)
+	
 	def fetch_card(self, index, peek=False):
 		'''
 		Fetches the Card at index. If peek=False, the card is
@@ -70,11 +76,17 @@ class Deck:
 				return self.card_list.pop(index)
 		except IndexError, e:
 			return None
+
+	def __str__(self):
+		return unicode(self)
 	
 	def __unicode__(self):
-		pass
+		return ", ".join([str(card) for card in self.card_list])
+	
+	def __len__(self):
+		return len(self.card_list)
 
-class AbstractCardContainer:
+class AbstractCardFactory:
 	def get_cards(self):
 		'''
 		Function to be overridden by child classes to get the correct
@@ -82,10 +94,23 @@ class AbstractCardContainer:
 		'''
 		raise NotImplementedError("Must override get_cards() in child classes")
 
-class EmptyCardContainer(AbstractCardContainer):
+class EmptyCardFactory(AbstractCardFactory):
 	def get_cards(self):
 		return []
-		
+
+class StandardCardFactory:
+	'''
+	Defines a standard 52-card deck as used for most card games
+	'''
+	SUITS = ["spade", "diamond", "heart", "club"]
+	VALUES = ["A", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
+	def get_cards(self):
+		cards = []
+		for suit in StandardCardFactory.SUITS:
+			for value in StandardCardFactory.VALUES:
+				cards.append(Card(suit, value))
+		return cards
+
 class Card:
 	def __init__(self, suit, value):
 		'''
@@ -110,7 +135,7 @@ class Hand:
 		Constructor builds a couple useful dictionaries and creates the
 		list to hold the cards
 		'''
-		self.cards = []
+		self.cards = Deck(EmptyCardFactory())
 		self.cards_by_suit = {}
 		self.cards_by_value = {}
 	
@@ -124,7 +149,7 @@ class Hand:
 		'''
 		Appends a new card to the hand
 		'''
-		self.cards.append(card)
+		self.cards.add_card(card)
 
 		if card.suit not in self.cards_by_suit:
 			self.cards_by_suit[card.suit] = []
@@ -138,15 +163,39 @@ class Hand:
 		'''
 		Removes a card from the hand
 		'''
-		self.cards.remove(card)
+		self.cards.remove_card(card)
+		self._remove_card_from_meta_lists(card)
+	
+	def top_card(self, peek = False):
+		'''
+		Fetches the top card in the hand
+		'''
+		card = self.cards.top_card(peek)
+		if not peek:
+			self._remove_card_from_meta_lists(card)
+		return card
+	
+	def bottom_card(self, peek = False):
+		'''
+		Fetches the bottom card in the hand
+		'''
+		card = self.cards.bottom_card(peek)
+		if not peek:
+			self._remove_card_from_meta_lists(card)
+		return card
+	
+	def _remove_card_from_meta_lists(self, card):
 		self.cards_by_suit[card.suit].remove(card)
 		self.cards_by_value[card.value].remove(card)
 	
+	def shuffle(self):
+		self.cards.shuffle()
+	
 	def __str__(self):
-		return unicode(self).encode("utf-8")
+		return unicode(self.cards)
 
 	def __unicode__(self):
-		return [(card.color, card.value) for card in self.card]
+		return str(self.cards)
 
 class AbstractPlayer:
 	def __init__(self, name):
@@ -175,17 +224,33 @@ class AbstractPlayer:
 		'''
 		raise NotImplementedError("Must override take_turn() in subclasses")
 	
-	def num_cards(self):
+	def num_cards_in_hand(self):
 		'''
 		How many cards in this player's hand
 		'''
 		return self.hand.num_cards()
 
-class AbstractGamePlay:
+class AbstractGameLogic:
 	NUM_TIMES_TO_SHUFFLE = 7
 
-	def print_starting_message(self):
+	@staticmethod
+	def get_starting_message():
 		raise NotImplementedError()
+	
+	@staticmethod
+	def get_friendly_name():
+		raise NotImplementedError()
+	
+	def __init__(self):
+		self.draw_pile = None
+		self.players = []
+		self.winner = None
+		self.cards_initialized = False
+		self._make_cards()
+		self.draw_pile.shuffle(self._get_num_times_to_shuffle())
+	
+	def _make_cards(self):
+		raise NotImplementedError()	
 
 	def start_game(self):
 		'''
@@ -194,7 +259,7 @@ class AbstractGamePlay:
 		'''
 		self._init_players()
 		self._deal()
-		self._play_game()
+		return self._play_game()
 
 	def _get_num_players(self):
 		'''
@@ -204,11 +269,11 @@ class AbstractGamePlay:
 		'''
 		min = self._get_min_num_players()
 		max = self._get_max_num_players()
-		num_players = int(raw_input("How many players (%d-%d)? " % (min, max)))
-		if num_players < min or num_players > max:
+		num_players = raw_input("How many players (%d-%d)? " % (min, max))
+		if not num_players.isdigit() or int(num_players) < min or int(num_players) > max:
 			print "Invalid number of players, must choose a number between %d and %d" % (min, max)
-			return self.get_num_players()
-		return num_players
+			return self._get_num_players()
+		return int(num_players)
 
 	def _init_players(self):
 		'''
@@ -221,6 +286,14 @@ class AbstractGamePlay:
 			name = raw_input("Enter name for player %s: " % str(i))
 			player_class = self._get_player_class()
 			self.players.append(player_class(name))
+
+	def _next_player(self, current_index, reversed):
+		new_index = (current_index - 1) if reversed else (current_index + 1)
+		if new_index < 0:
+			new_index = len(self.players) - 1
+		elif new_index == len(self.players):
+			new_index = 0
+		return new_index
 	
 	def _deal(self):
 		'''
@@ -257,4 +330,16 @@ class AbstractGamePlay:
 		Mundane, but fetches how many times we should shuffle the deck; can be
 		overridden
 		'''
-		return AbstractGamePlay.NUM_TIMES_TO_SHUFFLE
+		return AbstractGameLogic.NUM_TIMES_TO_SHUFFLE
+
+class Game:
+	def __init__(self, logic):
+		self.logic = logic()
+	
+	def start(self):
+		print("\n\n%s\n\n" % self.logic.get_starting_message())
+		winner = self.logic.start_game()
+		if winner:
+			print "Congratulations %s; you're the winner!" % winner.name
+		else:
+			print "Stalemate!"
