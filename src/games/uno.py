@@ -1,6 +1,8 @@
-from common.common import *
+from common.common import AbstractCardFactory, AbstractGameLogic, AbstractPlayer
+from common.common import Card, Deck, Hand
+from random import choice
 from time import sleep
-from sys import stdout
+
 
 def get_game_play_class():
 	return UnoGameLogic
@@ -123,7 +125,7 @@ class UnoHand(Hand):
 				most_owned_suit = suit
 
 		if most_owned_suit == None:
-			most_owned_suit = choice(Deck.COLORS)
+			most_owned_suit = choice(UnoCardFactory.SUITS)
 
 		return most_owned_suit
 	
@@ -228,7 +230,7 @@ class UnoGameLogic(AbstractGameLogic):
 		if self.cards_initialized:
 			return
 		self.draw_pile = Deck(UnoCardFactory())
-		self.discard_pile = Deck(EmptyCardFactory())
+		self.discard_pile = Deck(None)
 
 	
 	def _deal(self):
@@ -243,7 +245,7 @@ class UnoGameLogic(AbstractGameLogic):
 		self._flip_draw_card()
 		move_count = 0
 		player_index = 0
-		reversed = False
+		rot_reversed = False
 		active_suit = self.discard_pile.bottom_card(True).suit
 
 		while self.winner == None:
@@ -272,15 +274,15 @@ class UnoGameLogic(AbstractGameLogic):
 
 			if card_played.is_skip():
 				msg +="skip played! "
-				player_index = self._next_player(player_index, reversed)
+				player_index = self._next_player(player_index, rot_reversed)
 
 			if card_played.is_reverse():
 				msg += "reverse played! "
-				reversed = not reversed
+				rot_reversed = not rot_reversed
 
 			if card_played.is_draw():
 				msg += "draw played! "
-				player_index = self._next_player(player_index, reversed) 
+				player_index = self._next_player(player_index, rot_reversed) 
 				num_cards_drawn = 0
 				while num_cards_drawn < card_played.num_draw_cards():
 					self.players[player_index].draw_card(self.draw_pile.top_card())
@@ -295,7 +297,7 @@ class UnoGameLogic(AbstractGameLogic):
 				self.winner = player
 				break
 
-			player_index = self._next_player(player_index, reversed)	
+			player_index = self._next_player(player_index, rot_reversed)	
 		
 			sleep(.25)
 
@@ -304,11 +306,3 @@ class UnoGameLogic(AbstractGameLogic):
 	def _flip_draw_card(self):
 		self.discard_pile.add_card(self.draw_pile.top_card())
 		print "new card on discard pile: " + str(self.discard_pile.bottom_card(True))
-	
-	def _next_player(self, current_index, reversed):
-		new_index = (current_index - 1) if reversed else (current_index + 1)
-		if new_index < 0:
-			new_index = len(self.players) - 1
-		elif new_index == len(self.players):
-			new_index = 0
-		return new_index

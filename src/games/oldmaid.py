@@ -29,7 +29,7 @@ class OldMaidPlayer(AbstractPlayer):
 
 	def init_hand(self):
 		self.hand = Hand()
-		self.discard = Deck(EmptyCardFactory())
+		self.discard = Deck()
 	
 	def discard_pairs(self):
 		'''
@@ -121,7 +121,6 @@ class OldMaidGameLogic(AbstractGameLogic):
 				print "no cards left, skipping\n===========\n"
 				player_index = self._next_player(player_index, False)
 				continue
-			msg = player.name
 
 			draw_from_index = player_index
 			draw_from_player = None

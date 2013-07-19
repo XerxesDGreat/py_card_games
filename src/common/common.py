@@ -3,12 +3,14 @@ from random import shuffle
 class Deck:
 	MAX_SHUFFLES = 10
 
-	def __init__(self, card_contents):
+	def __init__(self, card_contents = None):
 		'''
 		Constructor; will create the card list for the deck,
 		so child classes should take that into consideration
 		'''
 		self.card_list = []
+		if card_contents is None:
+			card_contents = EmptyCardFactory()
 		self._populate_deck(card_contents)
 	
 	def _populate_deck(self, card_contents):
@@ -74,7 +76,7 @@ class Deck:
 				return self.card_list[index]
 			else:
 				return self.card_list.pop(index)
-		except IndexError, e:
+		except IndexError:
 			return None
 
 	def __str__(self):
@@ -205,7 +207,7 @@ class AbstractPlayer:
 		self.name = name
 		self.init_hand()
 	
-	def init_hand():
+	def init_hand(self):
 		'''
 		responsible for setting up the player's hand
 		'''
@@ -267,11 +269,11 @@ class AbstractGameLogic:
 		default, requests input of the user, but can (and should) be
 		overridden if a game has a specific number of players
 		'''
-		min = self._get_min_num_players()
-		max = self._get_max_num_players()
-		num_players = raw_input("How many players (%d-%d)? " % (min, max))
-		if not num_players.isdigit() or int(num_players) < min or int(num_players) > max:
-			print "Invalid number of players, must choose a number between %d and %d" % (min, max)
+		min_num_players = self._get_min_num_players()
+		max_num_players = self._get_max_num_players()
+		num_players = raw_input("How many players (%d-%d)? " % (min_num_players, max_num_players))
+		if not num_players.isdigit() or int(num_players) < min_num_players or int(num_players) > max_num_players:
+			print "Invalid number of players, must choose a number between %d and %d" % (min_num_players, max_num_players)
 			return self._get_num_players()
 		return int(num_players)
 
@@ -287,8 +289,8 @@ class AbstractGameLogic:
 			player_class = self._get_player_class()
 			self.players.append(player_class(name))
 
-	def _next_player(self, current_index, reversed):
-		new_index = (current_index - 1) if reversed else (current_index + 1)
+	def _next_player(self, current_index, rot_reversed):
+		new_index = (current_index - 1) if rot_reversed else (current_index + 1)
 		if new_index < 0:
 			new_index = len(self.players) - 1
 		elif new_index == len(self.players):
