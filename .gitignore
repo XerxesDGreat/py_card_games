@@ -36,3 +36,7 @@ nosetests.xml
 
 # vim cruft
 *.sw[op]
+
+# IDE cruft
+*.iml
+.idea/*
