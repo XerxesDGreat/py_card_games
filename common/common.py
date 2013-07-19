@@ -1,4 +1,4 @@
-from random import shuffle, choice
+from random import shuffle
 
 class Deck:
 	MAX_SHUFFLES = 10
