@@ -1,6 +1,6 @@
-from common.common import *
+from common.common import AbstractGameLogic, AbstractPlayer
+from common.common import Card, CardContainer, StandardCardFactory
 from time import sleep
-from sys import stdout
 
 def get_game_play_class():
 	return OldMaidGameLogic
@@ -28,8 +28,8 @@ class OldMaidPlayer(AbstractPlayer):
 		self.had_matches = False
 
 	def init_hand(self):
-		self.hand = Hand()
-		self.discard = Deck()
+		self.hand = CardContainer()
+		self.discard = CardContainer()
 	
 	def discard_pairs(self):
 		'''
@@ -89,7 +89,7 @@ class OldMaidGameLogic(AbstractGameLogic):
 		return OldMaidPlayer
 
 	def _make_cards(self):
-		self.draw_pile = Deck(OldMaidCardFactory())
+		self.draw_pile = CardContainer(OldMaidCardFactory())
 
 	
 	def _deal(self):
@@ -105,7 +105,7 @@ class OldMaidGameLogic(AbstractGameLogic):
 		for player in self.players:
 			player.discard_pairs()
 			cl = []
-			for card in player.hand.cards.card_list:
+			for card in player.hand.card_list:
 				cl.append(str(card))
 			print ", ".join(cl)
 			

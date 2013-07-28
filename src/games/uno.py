@@ -1,5 +1,5 @@
 from common.common import AbstractCardFactory, AbstractGameLogic, AbstractPlayer
-from common.common import Card, Deck, Hand
+from common.common import Card, CardContainer
 from random import choice
 from time import sleep
 
@@ -36,6 +36,10 @@ class UnoCardFactory(AbstractCardFactory):
 		return cards
 	
 class UnoCard(Card):
+	def __init__(self, suit, value):
+		self.special_state_used = False
+		Card.__init__(self, suit, value)
+	
 	def is_wild(self):
 		'''
 		Whether this card is wild
@@ -69,20 +73,26 @@ class UnoCard(Card):
 			return 0
 		return 2 if self.value is "D2" else 4
 	
-class UnoHand(Hand):
+	def is_match(self, card):
+		"""
+		Whether the given card matches this card
+		"""
+		return self.suit == card.suit or self.value == card.value
+	
+class UnoCardContainer(CardContainer):
 	def __init__(self):
 		'''
 		We also want to create a list of wild cards, so override
 		the base constructor
 		'''
-		Hand.__init__(self)
 		self.wild_cards = []
+		CardContainer.__init__(self)
 	
 	def add_card(self, card):
 		'''
 		Override base functionality to keep wild cards up to date
 		'''
-		Hand.add_card(self, card)
+		CardContainer.add_card(self, card)
 		if card.is_wild():
 			self.wild_cards.append(card)
 	
@@ -90,19 +100,21 @@ class UnoHand(Hand):
 		'''
 		Override base functionality to keep wild cards up to date
 		'''
-		Hand.remove_card(self, card)
+		CardContainer.remove_card(self, card)
 		if card.is_wild():
 			self.wild_cards.remove(card)
 	
-	def get_matches(self, card, active_suit):
+	def get_matches(self, card, active_suit, include_wild = True):
 		'''
-		Retrieves a list of all the non-wild cards which match the
+		Retrieves a list of all the cards which match the
 		provided card.  Also provide the active_suit in case the
 		card provided is wild
 		'''
 		ret = []
 		suit = active_suit if card.is_wild() else card.suit
 		all_cards = self.cards_by_suit.get(suit, []) + self.cards_by_value.get(card.value, [])
+		if include_wild:
+			all_cards = all_cards + self.wild_cards
 		for card in all_cards:
 			# this is inefficient
 			if card not in ret:
@@ -128,19 +140,13 @@ class UnoHand(Hand):
 			most_owned_suit = choice(UnoCardFactory.SUITS)
 
 		return most_owned_suit
-	
-	def __str__(self):
-		return unicode(self).encode("utf-8")
-
-	def __unicode__(self):
-		return [(card.suit, card.value) for card in self.card]
 
 class UnoPlayer(AbstractPlayer):
 	def init_hand(self):
 		'''
 		Override base functionality to create an UnoHand
 		'''
-		self.hand = UnoHand()
+		self.hand = UnoCardContainer()
 	
 	def determine_best_match(self, card, active_suit):
 		'''
@@ -149,34 +155,77 @@ class UnoPlayer(AbstractPlayer):
 		matches = self.hand.get_matches(card, active_suit)
 		if len(matches) > 0:
 			return choice(matches)
-		if len(self.hand.wild_cards) > 0:
-			return choice(self.hand.wild_cards)
 		return None
-
+	
 	def take_turn(self, **kwargs):
+		game_logic = kwargs.get("game_logic", "hello")
+		active_card = game_logic.discard_pile.bottom_card(True)
+		chosen_card = None
+		while chosen_card is None:
+			if len(self.hand.get_matches(active_card, game_logic.active_suit)) > 0:
+				chosen_card = self.determine_best_match(active_card, game_logic.active_suit)
+			else:
+				self._prompt_draw(game_logic)
+			
+		self.hand.remove_card(chosen_card)
+		game_logic.discard_pile.add_card(chosen_card)
+		if chosen_card.is_wild():
+			print "You played a wild card; please choose a suit!"
+			new_suit = self._get_choice_in_list(UnoCardFactory.SUITS)
+		else:
+			new_suit = chosen_card.suit
+			
+		return (chosen_card, new_suit)
+	
+	def _prompt_draw(self, game_logic):
 		'''
-		Implement how a turn is taken in Uno, ensuring all the values
-		are in the args
+		prompts the user to draw. Basically, any input will do it
 		'''
-		discard_pile = kwargs.get("discard_pile", "hello")
-		active_suit = kwargs.get("active_suit", "goodbye")
-		draw_pile = kwargs.get("draw_pile", "asdf")
-
-		active_card = discard_pile.bottom_card(True)
-
-		match = self.determine_best_match(active_card, active_suit)
-		while match == None:
-			if draw_pile.empty():
-				break;
-			self.hand.add_card(draw_pile.top_card())
-			match = self.determine_best_match(active_card, active_suit)
+		game_logic.update_draw_pile()
+		card = game_logic.draw_pile.top_card()
+		self.hand.add_card(card)
+		print("You have no matches for the top card in your hand; drew %s" % card)
 		
-		self.hand.remove_card(match)
-		discard_pile.add_card(match)
-		new_suit = match.suit
-		if match.is_wild():
-			new_suit = self.hand.get_suit_most_owned()
-		return (match, new_suit)
+	def _get_choice_in_list(self, selection_list):
+		'''
+		Displays a list of cards for the user and prompts them for a selection
+		'''
+		selection = self.hand.get_suit_most_owned()
+		print "%s selected" % selection
+		return selection
+	
+	def _validate_card_match(self, chosen_card, active_card, active_suit):
+		"""
+		Ensures that chosen_card is an acceptable match, given the active_card
+		and active_suit
+		"""
+		return chosen_card.is_match(active_card) or chosen_card.suit == active_suit
+
+class UnoRealPlayer(UnoPlayer):
+	
+	def _prompt_draw(self, game_logic):
+		'''
+		prompts the user to draw. Basically, any input will do it
+		'''
+		raw_input("You have no matches for the top card in your hand; hit enter to draw")
+		game_logic.update_draw_pile
+		self.hand.add_card(game_logic.draw_pile.top_card())
+		
+	def determine_best_match(self, active_card, active_suit):
+		'''
+		prompts the user to select a card to play
+		'''
+		chosen_card = None
+		while chosen_card is None:
+			print "Card to match is %s" % active_card
+			if active_card.is_wild():
+				print "Suit to match is %s" % active_suit
+			print "Your cards: "
+			chosen_card = self._get_choice_in_list(self.hand.cards)
+			
+			if not self.validate_card_match(chosen_card, active_card, active_suit):
+				chosen_card = None
+		return chosen_card
 
 
 class UnoGameLogic(AbstractGameLogic):
@@ -185,13 +234,17 @@ class UnoGameLogic(AbstractGameLogic):
 	MIN_PLAYERS = 2
 
 	def __init__(self):
-		self.draw_pile = None
-		self.discard_pile = None
-		self.players = []
-		self.cards_initialized = False
-		self.winner = None
-		self._make_cards()
-		self.draw_pile.shuffle(self._get_num_times_to_shuffle())
+		AbstractGameLogic.__init__(self)
+	
+	def update_draw_pile(self):
+		if self.draw_pile.empty():
+			print "***************************\nFLIPPING DISCARD AND SHUFFLING\n***************************\n"
+			sleep(1)
+			tmp = self.discard_pile
+			self.discard_pile = self.draw_pile
+			self.draw_pile = tmp
+			self.draw_pile.shuffle()
+			self.discard_pile.add_card(self.draw_pile.top_card())
 	
 	@staticmethod
 	def get_friendly_name():
@@ -227,10 +280,8 @@ class UnoGameLogic(AbstractGameLogic):
 		return UnoPlayer
 
 	def _make_cards(self):
-		if self.cards_initialized:
-			return
-		self.draw_pile = Deck(UnoCardFactory())
-		self.discard_pile = Deck(None)
+		self.draw_pile = CardContainer(UnoCardFactory())
+		self.discard_pile = CardContainer()
 
 	
 	def _deal(self):
@@ -246,20 +297,17 @@ class UnoGameLogic(AbstractGameLogic):
 		move_count = 0
 		player_index = 0
 		rot_reversed = False
-		active_suit = self.discard_pile.bottom_card(True).suit
+		self.active_suit = self.discard_pile.bottom_card(True).suit
 
 		while self.winner == None:
 			msg = ""
 			player = self.players[player_index]
 			starting_cards = player.num_cards_in_hand()
-			old_active_suit = active_suit
+			old_active_suit = self.active_suit
 
-			turn_args = {
-				"discard_pile": self.discard_pile,
-				"draw_pile": self.draw_pile,
-				"active_suit": active_suit
-			}
-			card_played, active_suit = player.take_turn(**turn_args)
+			turn_args = {"game_logic": self}
+			print player.hand
+			card_played, self.active_suit = player.take_turn(**turn_args)
 			move_count += 1
 
 			msg += "Player %s played %s and has " % (player.name, str(card_played))
@@ -273,23 +321,24 @@ class UnoGameLogic(AbstractGameLogic):
 				msg += "cards drawn: %d! " % cards_drawn
 
 			if card_played.is_skip():
-				msg +="skip played! "
+				print "Skip played!"
 				player_index = self._next_player(player_index, rot_reversed)
-
-			if card_played.is_reverse():
-				msg += "reverse played! "
-				rot_reversed = not rot_reversed
-
-			if card_played.is_draw():
-				msg += "draw played! "
-				player_index = self._next_player(player_index, rot_reversed) 
+			elif card_played.is_draw():
+				draw_player = self.players[self._next_player(player_index, rot_reversed)]
+				# if card is a draw, we draw and don't get to play
+				print "Draw played! %s is taking %d cards" % (draw_player.name, card_played.num_draw_cards())
 				num_cards_drawn = 0
 				while num_cards_drawn < card_played.num_draw_cards():
-					self.players[player_index].draw_card(self.draw_pile.top_card())
+					self.update_draw_pile()
+					draw_player.draw_card(self.draw_pile.top_card())
 					num_cards_drawn += 1
+				player_index = self._next_player(player_index, rot_reversed)
+			elif card_played.is_reverse():
+				print "Reverse played!"
+				rot_reversed = not rot_reversed
 
-			if active_suit != old_active_suit:
-				msg += "New suit: %s" % active_suit
+			if self.active_suit != old_active_suit:
+				msg += "New suit: %s" % self.active_suit
 			print (msg)
 			if player.num_cards_in_hand() == 1:
 				print "========= Player %s has UNO! =========" % player.name
@@ -297,10 +346,7 @@ class UnoGameLogic(AbstractGameLogic):
 				self.winner = player
 				break
 
-			player_index = self._next_player(player_index, rot_reversed)	
-		
-			sleep(.25)
-
+			player_index = self._next_player(player_index, rot_reversed)
 		return self.winner
 	
 	def _flip_draw_card(self):

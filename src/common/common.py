@@ -1,24 +1,23 @@
 from random import shuffle
 
-class Deck:
+
+class CardContainer:
 	MAX_SHUFFLES = 10
 
+	###################################
+	# INTERFACE #######################
+	###################################
 	def __init__(self, card_contents = None):
 		'''
 		Constructor; will create the card list for the deck,
 		so child classes should take that into consideration
 		'''
 		self.card_list = []
+		self.cards_by_suit = {}
+		self.cards_by_value = {}
 		if card_contents is None:
 			card_contents = EmptyCardFactory()
 		self._populate_deck(card_contents)
-	
-	def _populate_deck(self, card_contents):
-		'''
-		Adds all the involved cards to the deck
-		'''
-		for card in card_contents.get_cards():
-			self.add_card(card)
 	
 	def shuffle(self, num_times = 1):
 		'''
@@ -27,9 +26,15 @@ class Deck:
 		shuffles, then something is wrong)
 		'''
 		i = 0
-		while i < num_times and i < Deck.MAX_SHUFFLES:
+		while i < num_times and i < CardContainer.MAX_SHUFFLES:
 			shuffle(self.card_list)
 			i += 1
+	
+	def num_cards(self):
+		'''
+		How many cards are in this hand
+		'''
+		return len(self.card_list)
 	
 	def empty(self):
 		'''
@@ -42,26 +47,34 @@ class Deck:
 		Returns the top Card. If peek=False, acts as if the card
 		has been drawn, removing it from the deck
 		'''
-		return self.fetch_card(0, peek)
+		card = self.fetch_card(0, peek)
+		if not peek:
+			self._remove_card_from_meta_lists(card)
+		return card
 	
 	def bottom_card(self, peek=False):
 		'''
 		Returns the bottom Card. As with top_card() if peek=False,
 		card is removed from the deck
 		'''
-		return self.fetch_card(-1, peek)
+		card = self.fetch_card(-1, peek)
+		if not peek:
+			self._remove_card_from_meta_lists(card)
+		return card
 
 	def add_card(self, card):
 		'''
 		Adds a Card to the end of the list of cards in the deck
 		'''
 		self.card_list.append(card)
+		self._add_card_to_meta_lists(card)
 	
 	def remove_card(self, card):
 		'''
-		Removes a Card from the list
+		Removes a card from the hand
 		'''
 		self.card_list.remove(card)
+		self._remove_card_from_meta_lists(card)
 	
 	def fetch_card(self, index, peek=False):
 		'''
@@ -78,7 +91,57 @@ class Deck:
 				return self.card_list.pop(index)
 		except IndexError:
 			return None
+	
+	def clear(self):
+		'''
+		Removes all cards from this CardContainer
+		'''
+		self.card_list = []
+		self.cards_by_suit = {}
+		self.cards_by_value = {}
+	
+	def copy_from(self, src_card_container):
+		'''
+		Copies the entire state from the source CardContainer
+		'''
+		self.card_list = src_card_container.card_list
+		self.cards_by_suit = src_card_container.cards_by_suit
+		self.cards_by_value = src_card_container.cards_by_value
+	
+	###################################
+	# PROTECTED METHODS ###############
+	###################################
+	def _remove_card_from_meta_lists(self, card):
+		'''
+		Removes a card from the various meta lists of cards
+		'''
+		if card.suit is not None:
+			self.cards_by_suit[card.suit].remove(card)
+		self.cards_by_value[card.value].remove(card)
+		
+	def _add_card_to_meta_lists(self, card):
+		'''
+		Adds a card to the various meta lists of cards
+		'''
+		if card.suit is not None:
+			if card.suit not in self.cards_by_suit:
+				self.cards_by_suit[card.suit] = []
+			self.cards_by_suit[card.suit].append(card)
 
+		if card.value not in self.cards_by_value:
+			self.cards_by_value[card.value] = []
+		self.cards_by_value[card.value].append(card)
+	
+	def _populate_deck(self, card_contents):
+		'''
+		Adds all the involved cards to the deck
+		'''
+		for card in card_contents.get_cards():
+			self.add_card(card)
+
+	###################################
+	# MAGIC METHODS ###################
+	###################################
 	def __str__(self):
 		return unicode(self)
 	
@@ -131,79 +194,12 @@ class Card:
 		value = "None" if self.value == None else str(self.value)
 		return suit + "-" + value
 
-class Hand:
-	def __init__(self):
-		'''
-		Constructor builds a couple useful dictionaries and creates the
-		list to hold the cards
-		'''
-		self.cards = Deck(EmptyCardFactory())
-		self.cards_by_suit = {}
-		self.cards_by_value = {}
-	
-	def num_cards(self):
-		'''
-		How many cards are in this hand
-		'''
-		return len(self.cards)
-	
-	def add_card(self, card):
-		'''
-		Appends a new card to the hand
-		'''
-		self.cards.add_card(card)
-
-		if card.suit not in self.cards_by_suit:
-			self.cards_by_suit[card.suit] = []
-		self.cards_by_suit[card.suit].append(card)
-
-		if card.value not in self.cards_by_value:
-			self.cards_by_value[card.value] = []
-		self.cards_by_value[card.value].append(card)
-	
-	def remove_card(self, card):
-		'''
-		Removes a card from the hand
-		'''
-		self.cards.remove_card(card)
-		self._remove_card_from_meta_lists(card)
-	
-	def top_card(self, peek = False):
-		'''
-		Fetches the top card in the hand
-		'''
-		card = self.cards.top_card(peek)
-		if not peek:
-			self._remove_card_from_meta_lists(card)
-		return card
-	
-	def bottom_card(self, peek = False):
-		'''
-		Fetches the bottom card in the hand
-		'''
-		card = self.cards.bottom_card(peek)
-		if not peek:
-			self._remove_card_from_meta_lists(card)
-		return card
-	
-	def _remove_card_from_meta_lists(self, card):
-		self.cards_by_suit[card.suit].remove(card)
-		self.cards_by_value[card.value].remove(card)
-	
-	def shuffle(self):
-		self.cards.shuffle()
-	
-	def __str__(self):
-		return unicode(self.cards)
-
-	def __unicode__(self):
-		return str(self.cards)
-
 class AbstractPlayer:
 	def __init__(self, name):
 		'''
 		Initializes the player by adding the name; each game's
 		'''
+		self.hand = CardContainer()
 		self.name = name
 		self.init_hand()
 	
@@ -247,7 +243,6 @@ class AbstractGameLogic:
 		self.draw_pile = None
 		self.players = []
 		self.winner = None
-		self.cards_initialized = False
 		self._make_cards()
 		self.draw_pile.shuffle(self._get_num_times_to_shuffle())
 	
@@ -290,6 +285,9 @@ class AbstractGameLogic:
 			self.players.append(player_class(name))
 
 	def _next_player(self, current_index, rot_reversed):
+		'''
+		Finds the next player
+		'''
 		new_index = (current_index - 1) if rot_reversed else (current_index + 1)
 		if new_index < 0:
 			new_index = len(self.players) - 1
@@ -317,7 +315,7 @@ class AbstractGameLogic:
 	
 	def _get_min_num_players(self):
 		'''
-		Minumum number of players for the game
+		Minimum number of players for the game
 		'''
 		raise NotImplementedError()
 	
@@ -337,6 +335,7 @@ class AbstractGameLogic:
 class Game:
 	def __init__(self, logic):
 		self.logic = logic()
+		self.continue_playing = True
 	
 	def start(self):
 		print("\n\n%s\n\n" % self.logic.get_starting_message())
@@ -345,3 +344,10 @@ class Game:
 			print "Congratulations %s; you're the winner!" % winner.name
 		else:
 			print "Stalemate!"
+				
+				
+				
+				
+				
+				
+				 
